@@ -1,0 +1,1303 @@
+<html>
+<head>
+
+
+<title>ColorMoves</title>
+<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+<link rel="stylesheet" type="text/css" href="ColorMoves.css">
+<link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+<script src="https://code.jquery.com/jquery-1.12.4.js"></script>
+<script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+<script type="text/javascript" src="lib/gl-matrix.min.js"></script>
+<script type="text/javascript" src="lib/webgl-utils.js"></script>
+<script type="text/javascript" src="lib/fits/fits.js" charset="utf-8"></script>
+<script type="text/javascript" src="lib/jszip.min.js"></script>
+<script type="text/javascript" src="Utility.js"></script>
+<script type="text/javascript" src="PngChunkReader.js"></script>
+<script type="text/javascript" src="ImageReader.js"></script>
+<script type="text/javascript" src="ColormapReader.js"></script>
+<script type="text/javascript" src="Viewer.js"></script>
+<script type="text/javascript" src="ImageCanvas.js"></script>
+<script type="text/javascript" src="ColorMapCanvas.js"></script>
+<script type="text/javascript" src="ColorMapPicker.js"></script>
+<script type="text/javascript" src="ActionManager.js"></script>
+<script type="text/javascript" src="ColorMapCreator.js"></script>
+<script type="text/javascript" src="Graphics.js"></script>
+<script type="text/javascript" src="Input.js"></script>
+
+
+<!-- >>> Shaders -->
+
+
+<script id="vsSimple" type="x-shader/x-vertex">
+	attribute vec3 vpos;
+	attribute vec2 vtexcoord;
+	uniform mat4 matWorldViewProj;
+	varying vec2 uv;
+
+	void main()
+	{
+		gl_Position = matWorldViewProj * vec4(vpos, 1.0);
+		uv = vtexcoord;
+	}
+</script>
+<script id="vsAlpha" type="x-shader/x-vertex">
+	precision mediump float;
+	precision mediump int;
+	uniform float colorMapStart[15], colorMapEnd[15];
+	uniform float colorMapStartValue[15], colorMapEndValue[15];
+	uniform float colorMapStartAlpha[15], colorMapEndAlpha[15];
+	uniform int colorMapFlipped[15];
+	attribute vec3 vpos;
+	uniform mat4 matWorldViewProj;
+	uniform mat4 matTexCoordTransform;
+	varying vec2 uv;
+
+	void main()
+	{
+		float u = ((matTexCoordTransform * vec4(2.0 * vpos.x - 1.0, 0.0, 0.0, 1.0)).x + 1.0) / 2.0;
+		uv = vec2(u, 0.5);
+		
+		if(vpos.y != 0.0)
+		{
+			float y = 1.0;
+			for(int i = 0; i < 15; ++i)
+				if(uv.x >= colorMapStart[i] && uv.x <= colorMapEnd[i])
+				{
+					float v = (uv.x - colorMapStart[i]) / (colorMapEnd[i] - colorMapStart[i]);
+					float a = v * colorMapEndAlpha[i] + (1.0 - v) * colorMapStartAlpha[i];
+					y = 1.0 + a * 9.0;
+					break;
+				}
+			gl_Position = matWorldViewProj * vec4(vpos.x, y, vpos.z, 1.0);
+		}
+		else
+			gl_Position = matWorldViewProj * vec4(vpos, 1.0);
+	}
+</script>
+<script id="fsSimple" type="x-shader/x-fragment">
+	precision mediump float;
+	varying vec2 uv;
+	uniform sampler2D uSampler;
+
+	void main()
+	{
+		gl_FragColor = texture2D(uSampler, uv);
+	}
+</script>
+<script id="fsLine" type="x-shader/x-fragment">
+	precision mediump float;
+	uniform vec4 color;
+
+	void main()
+	{
+		gl_FragColor = color;
+	}
+</script>
+<script id="fsHighlight" type="x-shader/x-fragment">
+	precision mediump float;
+	varying vec2 uv;
+
+	void main()
+	{
+		gl_FragColor = vec4(1.0, 0.0, 0.0, 0.4 + 0.2 * uv.x * uv.y);
+	}
+</script>
+<script id="fsColorMapping" type="x-shader/x-fragment">
+	precision mediump float;
+	precision mediump int;
+	uniform float colorMapStart[15], colorMapEnd[15];
+	uniform float colorMapStartValue[15], colorMapEndValue[15];
+	uniform float colorMapStartAlpha[15], colorMapEndAlpha[15];
+	uniform int colorMapFlipped[15];
+	varying vec2 uv;
+	uniform sampler2D uSampler, colorMap[15];
+	uniform vec3 NanColor;
+	uniform vec2 InvSize;
+	uniform float highlightValue;
+
+	float sampleValue(in sampler2D sampler, in vec2 uv)
+	{
+		// Get float value (valueS) from RGB data
+		vec4 rgba = texture2D(sampler, uv);
+		if(rgba.a <= 1e-5)
+			return -1e20;
+		float valueI = floor(rgba.r * 255.0) * 65536.0 + floor(rgba.g * 255.0) * 256.0 + floor(rgba.b * 255.0);
+		if(valueI < 0.5)
+			return -1e20;
+		float valueS = (valueI - 1.0) / 16777214.0; // 0 is reserved as 'nothing' //float(0xfffffe)
+		valueS = clamp(valueS, 0.0, 1.0);
+		return valueS;
+	}
+	/*float sampleValue(in sampler2D sampler, in vec2 uv)
+	{
+		// Get float value from float texture data
+		return texture2D(sampler, uv).r;
+	}*/
+
+	void main()
+	{
+/*vec4 c = texture2D(uSampler, uv);
+gl_FragColor = vec4(c.r, 0.0, 0.0, 1.0);
+return;*/
+		float value = sampleValue(uSampler, uv);
+		if (value == -1e20)
+		{
+			gl_FragColor = vec4(NanColor, 0.0);
+			return;
+		}
+
+		/*float n1, n2;
+		if (highlightValue != -1e20 && (n1 = sampleValue(uSampler, uv + vec2(InvSize.x, 0.0))) != -1e20 && (n2 = sampleValue(uSampler, uv + vec2(0.0, InvSize.y))) != -1e20)
+		{
+			float diff = sign(value - highlightValue) * sign(highlightValue - n1) + sign(value - highlightValue) * sign(highlightValue - n2);
+			if (diff > 0.0)
+			{
+				gl_FragColor = vec4(0.5 * diff, 0.0, 0.0, 1.0);
+				return;
+			}
+		}*/
+
+		float f, n, h = 0.0;
+		if (highlightValue != -1e20 &&(n = sampleValue(uSampler, uv + vec2(-InvSize.x, 0.0))) != -1e20 &&
+			(f = (highlightValue - n) / (value - n)) > 0.0 && f <= 1.0)
+			h += f;
+		if (highlightValue != -1e20 && (n = sampleValue(uSampler, uv + vec2(InvSize.x, 0.0))) != -1e20 &&
+			(f = (highlightValue - n) / (value - n)) > 0.0 && f <= 1.0)
+			h += f;
+		if (highlightValue != -1e20 && (n = sampleValue(uSampler, uv + vec2(0.0, -InvSize.y))) != -1e20 &&
+			(f = (highlightValue - n) / (value - n)) > 0.0 && f <= 1.0)
+			h += f;
+		if (highlightValue != -1e20 && (n = sampleValue(uSampler, uv + vec2(0.0, InvSize.y))) != -1e20 &&
+			(f = (highlightValue - n) / (value - n)) > 0.0 && f <= 1.0)
+			h += f;
+		h /= 2.0;
+		
+/*vec3 rgb = texture2D(uSampler, uv).rgb;
+float value = rgb.g;
+gl_FragColor = vec4(value, value, value, 1.0);
+return;*/
+		
+		/*for(int i = 0; i < 15; ++i)
+			if(value >= colorMapStart[i] && value <= colorMapEnd[i])
+			{
+				float v = (value - colorMapStart[i]) / (colorMapEnd[i] - colorMapStart[i]);
+				v = (v - colorMapStartValue[i]) / (colorMapEndValue[i] - colorMapStartValue[i]);
+				float a = v * colorMapEndAlpha[i] + (1.0 - v) * colorMapStartAlpha[i];
+				if(colorMapFlipped[i] == 1) v = 1.0 - v;
+				gl_FragColor = vec4(texture2D(colorMap[i], vec2(v, 0.5)).rgb + vec3(-h, h, -h), a + h);
+				//return; // Warning: This causes artifacts on Chromium (Do not un-comment!)
+			}*/
+		
+		if(value >= colorMapStart[0] && value <= colorMapEnd[0])
+		{
+			float v = (value - colorMapStart[0]) / (colorMapEnd[0] - colorMapStart[0]);
+			v = (v - colorMapStartValue[0]) / (colorMapEndValue[0] - colorMapStartValue[0]);
+			float a = v * colorMapEndAlpha[0] + (1.0 - v) * colorMapStartAlpha[0];
+			if(colorMapFlipped[0] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[0], vec2(v, 0.5)).rgb + vec3(-h, h, -h), a + h);
+		}
+		else if(value >= colorMapStart[1] && value <= colorMapEnd[1])
+		{
+			float v = (value - colorMapStart[1]) / (colorMapEnd[1] - colorMapStart[1]);
+			v = (v - colorMapStartValue[1]) / (colorMapEndValue[1] - colorMapStartValue[1]);
+			float a = v * colorMapEndAlpha[1] + (1.0 - v) * colorMapStartAlpha[1];
+			if(colorMapFlipped[1] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[1], vec2(v, 0.5)).rgb + vec3(-h, h, -h), a + h);
+		}
+		else if(value >= colorMapStart[2] && value <= colorMapEnd[2])
+		{
+			float v = (value - colorMapStart[2]) / (colorMapEnd[2] - colorMapStart[2]);
+			v = (v - colorMapStartValue[2]) / (colorMapEndValue[2] - colorMapStartValue[2]);
+			float a = v * colorMapEndAlpha[2] + (1.0 - v) * colorMapStartAlpha[2];
+			if(colorMapFlipped[2] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[2], vec2(v, 0.5)).rgb + vec3(-h, h, -h), a + h);
+		}
+		else if(value >= colorMapStart[3] && value <= colorMapEnd[3])
+		{
+			float v = (value - colorMapStart[3]) / (colorMapEnd[3] - colorMapStart[3]);
+			v = (v - colorMapStartValue[3]) / (colorMapEndValue[3] - colorMapStartValue[3]);
+			float a = v * colorMapEndAlpha[3] + (1.0 - v) * colorMapStartAlpha[3];
+			if(colorMapFlipped[3] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[3], vec2(v, 0.5)).rgb + vec3(-h, h, -h), a + h);
+		}
+		else if(value >= colorMapStart[4] && value <= colorMapEnd[4])
+		{
+			float v = (value - colorMapStart[4]) / (colorMapEnd[4] - colorMapStart[4]);
+			v = (v - colorMapStartValue[4]) / (colorMapEndValue[4] - colorMapStartValue[4]);
+			float a = v * colorMapEndAlpha[4] + (1.0 - v) * colorMapStartAlpha[4];
+			if(colorMapFlipped[4] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[4], vec2(v, 0.5)).rgb + vec3(-h, h, -h), a + h);
+		}
+		else if(value >= colorMapStart[5] && value <= colorMapEnd[5])
+		{
+			float v = (value - colorMapStart[5]) / (colorMapEnd[5] - colorMapStart[5]);
+			v = (v - colorMapStartValue[5]) / (colorMapEndValue[5] - colorMapStartValue[5]);
+			float a = v * colorMapEndAlpha[5] + (1.0 - v) * colorMapStartAlpha[5];
+			if(colorMapFlipped[5] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[5], vec2(v, 0.5)).rgb + vec3(-h, h, -h), a + h);
+		}
+		else if(value >= colorMapStart[6] && value <= colorMapEnd[6])
+		{
+			float v = (value - colorMapStart[6]) / (colorMapEnd[6] - colorMapStart[6]);
+			v = (v - colorMapStartValue[6]) / (colorMapEndValue[6] - colorMapStartValue[6]);
+			float a = v * colorMapEndAlpha[6] + (1.0 - v) * colorMapStartAlpha[6];
+			if(colorMapFlipped[6] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[6], vec2(v, 0.5)).rgb + vec3(-h, h, -h), a + h);
+		}
+		else if(value >= colorMapStart[7] && value <= colorMapEnd[7])
+		{
+			float v = (value - colorMapStart[7]) / (colorMapEnd[7] - colorMapStart[7]);
+			v = (v - colorMapStartValue[7]) / (colorMapEndValue[7] - colorMapStartValue[7]);
+			float a = v * colorMapEndAlpha[7] + (1.0 - v) * colorMapStartAlpha[7];
+			if(colorMapFlipped[7] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[7], vec2(v, 0.5)).rgb + vec3(-h, h, -h), a + h);
+		}
+		else if(value >= colorMapStart[8] && value <= colorMapEnd[8])
+		{
+			float v = (value - colorMapStart[8]) / (colorMapEnd[8] - colorMapStart[8]);
+			v = (v - colorMapStartValue[8]) / (colorMapEndValue[8] - colorMapStartValue[8]);
+			float a = v * colorMapEndAlpha[8] + (1.0 - v) * colorMapStartAlpha[8];
+			if(colorMapFlipped[8] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[8], vec2(v, 0.5)).rgb + vec3(-h, h, -h), a + h);
+		}
+		else if(value >= colorMapStart[9] && value <= colorMapEnd[9])
+		{
+			float v = (value - colorMapStart[9]) / (colorMapEnd[9] - colorMapStart[9]);
+			v = (v - colorMapStartValue[9]) / (colorMapEndValue[9] - colorMapStartValue[9]);
+			float a = v * colorMapEndAlpha[9] + (1.0 - v) * colorMapStartAlpha[9];
+			if(colorMapFlipped[9] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[9], vec2(v, 0.5)).rgb + vec3(-h, h, -h), a + h);
+		}
+		else if(value >= colorMapStart[10] && value <= colorMapEnd[10])
+		{
+			float v = (value - colorMapStart[10]) / (colorMapEnd[10] - colorMapStart[10]);
+			v = (v - colorMapStartValue[10]) / (colorMapEndValue[10] - colorMapStartValue[10]);
+			float a = v * colorMapEndAlpha[10] + (1.0 - v) * colorMapStartAlpha[10];
+			if(colorMapFlipped[10] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[10], vec2(v, 0.5)).rgb + vec3(-h, h, -h), a + h);
+		}
+		else if(value >= colorMapStart[11] && value <= colorMapEnd[11])
+		{
+			float v = (value - colorMapStart[11]) / (colorMapEnd[11] - colorMapStart[11]);
+			v = (v - colorMapStartValue[11]) / (colorMapEndValue[11] - colorMapStartValue[11]);
+			float a = v * colorMapEndAlpha[11] + (1.0 - v) * colorMapStartAlpha[11];
+			if(colorMapFlipped[11] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[11], vec2(v, 0.5)).rgb + vec3(-h, h, -h), a + h);
+		}
+		else if(value >= colorMapStart[12] && value <= colorMapEnd[12])
+		{
+			float v = (value - colorMapStart[12]) / (colorMapEnd[12] - colorMapStart[12]);
+			v = (v - colorMapStartValue[12]) / (colorMapEndValue[12] - colorMapStartValue[12]);
+			float a = v * colorMapEndAlpha[12] + (1.0 - v) * colorMapStartAlpha[12];
+			if(colorMapFlipped[12] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[12], vec2(v, 0.5)).rgb + vec3(-h, h, -h), a + h);
+		}
+		else if(value >= colorMapStart[13] && value <= colorMapEnd[13])
+		{
+			float v = (value - colorMapStart[13]) / (colorMapEnd[13] - colorMapStart[13]);
+			v = (v - colorMapStartValue[13]) / (colorMapEndValue[13] - colorMapStartValue[13]);
+			float a = v * colorMapEndAlpha[13] + (1.0 - v) * colorMapStartAlpha[13];
+			if(colorMapFlipped[13] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[13], vec2(v, 0.5)).rgb + vec3(-h, h, -h), a + h);
+		}
+		else if(value >= colorMapStart[14] && value <= colorMapEnd[14])
+		{
+			float v = (value - colorMapStart[14]) / (colorMapEnd[14] - colorMapStart[14]);
+			v = (v - colorMapStartValue[14]) / (colorMapEndValue[14] - colorMapStartValue[14]);
+			float a = v * colorMapEndAlpha[14] + (1.0 - v) * colorMapStartAlpha[14];
+			if(colorMapFlipped[14] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[14], vec2(v, 0.5)).rgb + vec3(-h, h, -h), a + h);
+		}
+	}
+</script>
+<script id="fsColorMap" type="x-shader/x-fragment">
+	precision mediump float;
+	varying vec2 uv;
+	uniform sampler2D colorMap[15];
+	uniform float colorMapStart[15], colorMapEnd[15];
+	uniform float colorMapStartValue[15], colorMapEndValue[15];
+	uniform int colorMapFlipped[15];
+	uniform vec3 NanColor;
+
+	void main()
+	{
+		/*for(int i = 0; i < 15; ++i)
+			if(uv.x >= colorMapStart[i] && uv.x <= colorMapEnd[i])
+			{
+				float v = (uv.x - colorMapStart[i]) / (colorMapEnd[i] - colorMapStart[i]);
+				v = (v - colorMapStartValue[i]) / (colorMapEndValue[i] - colorMapStartValue[i]);
+				if(colorMapFlipped[i] == 1) v = 1.0 - v;
+				gl_FragColor = vec4(texture2D(colorMap[i], vec2(v, 0.5)).rgb, 1.0);
+				//return; // Warning: This causes artifacts on Chromium (Do not un-comment!)
+			}*/
+		
+		if(uv.x >= colorMapStart[0] && uv.x <= colorMapEnd[0])
+		{
+			float v = (uv.x - colorMapStart[0]) / (colorMapEnd[0] - colorMapStart[0]);
+			v = (v - colorMapStartValue[0]) / (colorMapEndValue[0] - colorMapStartValue[0]);
+			if(colorMapFlipped[0] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[0], vec2(v, 0.5)).rgb, 1.0);
+		}
+		else if(uv.x >= colorMapStart[1] && uv.x <= colorMapEnd[1])
+		{
+			float v = (uv.x - colorMapStart[1]) / (colorMapEnd[1] - colorMapStart[1]);
+			v = (v - colorMapStartValue[1]) / (colorMapEndValue[1] - colorMapStartValue[1]);
+			if(colorMapFlipped[1] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[1], vec2(v, 0.5)).rgb, 1.0);
+		}
+		else if(uv.x >= colorMapStart[2] && uv.x <= colorMapEnd[2])
+		{
+			float v = (uv.x - colorMapStart[2]) / (colorMapEnd[2] - colorMapStart[2]);
+			v = (v - colorMapStartValue[2]) / (colorMapEndValue[2] - colorMapStartValue[2]);
+			if(colorMapFlipped[2] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[2], vec2(v, 0.5)).rgb, 1.0);
+		}
+		else if(uv.x >= colorMapStart[3] && uv.x <= colorMapEnd[3])
+		{
+			float v = (uv.x - colorMapStart[3]) / (colorMapEnd[3] - colorMapStart[3]);
+			v = (v - colorMapStartValue[3]) / (colorMapEndValue[3] - colorMapStartValue[3]);
+			if(colorMapFlipped[3] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[3], vec2(v, 0.5)).rgb, 1.0);
+		}
+		else if(uv.x >= colorMapStart[4] && uv.x <= colorMapEnd[4])
+		{
+			float v = (uv.x - colorMapStart[4]) / (colorMapEnd[4] - colorMapStart[4]);
+			v = (v - colorMapStartValue[4]) / (colorMapEndValue[4] - colorMapStartValue[4]);
+			if(colorMapFlipped[4] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[4], vec2(v, 0.5)).rgb, 1.0);
+		}
+		else if(uv.x >= colorMapStart[5] && uv.x <= colorMapEnd[5])
+		{
+			float v = (uv.x - colorMapStart[5]) / (colorMapEnd[5] - colorMapStart[5]);
+			v = (v - colorMapStartValue[5]) / (colorMapEndValue[5] - colorMapStartValue[5]);
+			if(colorMapFlipped[5] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[5], vec2(v, 0.5)).rgb, 1.0);
+		}
+		else if(uv.x >= colorMapStart[6] && uv.x <= colorMapEnd[6])
+		{
+			float v = (uv.x - colorMapStart[6]) / (colorMapEnd[6] - colorMapStart[6]);
+			v = (v - colorMapStartValue[6]) / (colorMapEndValue[6] - colorMapStartValue[6]);
+			if(colorMapFlipped[6] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[6], vec2(v, 0.5)).rgb, 1.0);
+		}
+		else if(uv.x >= colorMapStart[7] && uv.x <= colorMapEnd[7])
+		{
+			float v = (uv.x - colorMapStart[7]) / (colorMapEnd[7] - colorMapStart[7]);
+			v = (v - colorMapStartValue[7]) / (colorMapEndValue[7] - colorMapStartValue[7]);
+			if(colorMapFlipped[7] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[7], vec2(v, 0.5)).rgb, 1.0);
+		}
+		else if(uv.x >= colorMapStart[8] && uv.x <= colorMapEnd[8])
+		{
+			float v = (uv.x - colorMapStart[8]) / (colorMapEnd[8] - colorMapStart[8]);
+			v = (v - colorMapStartValue[8]) / (colorMapEndValue[8] - colorMapStartValue[8]);
+			if(colorMapFlipped[8] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[8], vec2(v, 0.5)).rgb, 1.0);
+		}
+		else if(uv.x >= colorMapStart[9] && uv.x <= colorMapEnd[9])
+		{
+			float v = (uv.x - colorMapStart[9]) / (colorMapEnd[9] - colorMapStart[9]);
+			v = (v - colorMapStartValue[9]) / (colorMapEndValue[9] - colorMapStartValue[9]);
+			if(colorMapFlipped[9] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[9], vec2(v, 0.5)).rgb, 1.0);
+		}
+		else if(uv.x >= colorMapStart[10] && uv.x <= colorMapEnd[10])
+		{
+			float v = (uv.x - colorMapStart[10]) / (colorMapEnd[10] - colorMapStart[10]);
+			v = (v - colorMapStartValue[10]) / (colorMapEndValue[10] - colorMapStartValue[10]);
+			if(colorMapFlipped[10] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[10], vec2(v, 0.5)).rgb, 1.0);
+		}
+		else if(uv.x >= colorMapStart[11] && uv.x <= colorMapEnd[11])
+		{
+			float v = (uv.x - colorMapStart[11]) / (colorMapEnd[11] - colorMapStart[11]);
+			v = (v - colorMapStartValue[11]) / (colorMapEndValue[11] - colorMapStartValue[11]);
+			if(colorMapFlipped[11] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[11], vec2(v, 0.5)).rgb, 1.0);
+		}
+		else if(uv.x >= colorMapStart[12] && uv.x <= colorMapEnd[12])
+		{
+			float v = (uv.x - colorMapStart[12]) / (colorMapEnd[12] - colorMapStart[12]);
+			v = (v - colorMapStartValue[12]) / (colorMapEndValue[12] - colorMapStartValue[12]);
+			if(colorMapFlipped[12] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[12], vec2(v, 0.5)).rgb, 1.0);
+		}
+		else if(uv.x >= colorMapStart[13] && uv.x <= colorMapEnd[13])
+		{
+			float v = (uv.x - colorMapStart[13]) / (colorMapEnd[13] - colorMapStart[13]);
+			v = (v - colorMapStartValue[13]) / (colorMapEndValue[13] - colorMapStartValue[13]);
+			if(colorMapFlipped[13] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[13], vec2(v, 0.5)).rgb, 1.0);
+		}
+		else if(uv.x >= colorMapStart[14] && uv.x <= colorMapEnd[14])
+		{
+			float v = (uv.x - colorMapStart[14]) / (colorMapEnd[14] - colorMapStart[14]);
+			v = (v - colorMapStartValue[14]) / (colorMapEndValue[14] - colorMapStartValue[14]);
+			if(colorMapFlipped[14] == 1) v = 1.0 - v;
+			gl_FragColor = vec4(texture2D(colorMap[14], vec2(v, 0.5)).rgb, 1.0);
+		}
+	}
+</script>
+
+
+</head>
+
+
+<body onload="onLoad()" onresize="onResize()">
+	
+	<div id="divColorMapPicker">
+		<table id="tableColorMapPicker" cellspacing="0">
+		</table>
+	</div>
+	
+	<div id="divWorkArea">
+		<div id="ImageSection" resize="onResize()">
+			<canvas id="cvImage" width="800" height="400"></canvas>
+			
+			<div id="ImageControlSection">
+				<input class="button" type="image" id="saveImageButton" src="saveImageButton.png" onclick="saveImages();"/>
+				<!--<input class="button" type="image" id="saveImageButton" src="saveImageButton.png" onclick="imageCanvas.save();"/>-->
+				<input class="button" type="image" id="zoomFitButton" src="zoomFitButton.png" onclick="imageCanvas.zoomFit()"/>
+				<input class="button" type="image" id="zoomResetButton" src="zoomResetButton.png" onclick="imageCanvas.zoomReset()"/>
+			</div>
+		</div>
+		
+		<div id="ColorMapSection">
+			<div id="LeftControlSection" align="left">
+				<input class="button" type="image" id="cmdSplitter" src="splitterButton.png" onclick="/*hideColorPicker();*/ var canvas = document.getElementById('cvColorMap'); canvas.style.cursor = canvas.style.cursor.indexOf('splitterCursor') != -1 ? CURSOR_DEFAULT : 'url(splitterCursor.png), auto';"/>
+				<input class="button" type="image" id="cmdTrash1" src="trashButton.png"/>
+				<input class="button" type="image" id="cmdInterjector" src="interjectorButton.png" onclick="/*hideColorPicker();*/ var canvas = document.getElementById('cvColorMap'); canvas.style.cursor = canvas.style.cursor.indexOf('interjectorCursor') != -1 ? CURSOR_DEFAULT : 'url(interjectorCursor.png) 9 0, auto';"/>
+				<div class="button" id="divUndoRedo">
+					<input class="narrowButton" type="image" id="cmdUndo" src="undoButton.png" onclick="actionManager.undo();"/>
+					<input class="narrowButton" type="image" id="cmdUndo2" src="undoButton2.png" onclick="actionManager.undo();" style="display: none"/>
+					<input class="narrowButton" type="image" id="cmdRedo" src="redoButton.png" onclick="actionManager.redo();"/>
+					<input class="narrowButton" type="image" id="cmdRedo2" src="redoButton2.png" onclick="actionManager.redo();" style="display: none"/>
+				</div>
+				<label id="lblHistogramResolution" style="position: relative; top:166px; visibility: hidden"></label>
+				<input id="rangeHistogramResolution" type="range" orient="vertical" min="4" max="16" value="8" step="1" oninput="setHistogramResolution()">
+			</div>
+			<div id="divColorMap">
+				<label id = "lblHistogramH0" class="lblHistogramH">0%</label>
+				<label id = "lblHistogramH1" class="lblHistogramH">10%</label>
+				<label id = "lblHistogramH2" class="lblHistogramH">20%</label>
+				<label id = "lblHistogramH3" class="lblHistogramH">30%</label>
+				<label id = "lblHistogramH4" class="lblHistogramH">40%</label>
+				<label id = "lblHistogramH5" class="lblHistogramH">50%</label>
+				<label id = "lblHistogramH6" class="lblHistogramH">60%</label>
+				<label id = "lblHistogramH7" class="lblHistogramH">70%</label>
+				<label id = "lblHistogramH8" class="lblHistogramH">80%</label>
+				<label id = "lblHistogramH9" class="lblHistogramH">90%</label>
+				<label id = "lblHistogramH10" class="lblHistogramH">100%</label>
+				
+				<label id = "lblHistogramV0" class="lblHistogramV">0%</label>
+				<label id = "lblHistogramV1" class="lblHistogramV">10%</label>
+				<label id = "lblHistogramV2" class="lblHistogramV">20%</label>
+				<label id = "lblHistogramV3" class="lblHistogramV">30%</label>
+				<label id = "lblHistogramV4" class="lblHistogramV">40%</label>
+				<label id = "lblHistogramV5" class="lblHistogramV">50%</label>
+				<label id = "lblHistogramV6" class="lblHistogramV">60%</label>
+				<label id = "lblHistogramV7" class="lblHistogramV">70%</label>
+				<label id = "lblHistogramV8" class="lblHistogramV">80%</label>
+				<label id = "lblHistogramV9" class="lblHistogramV">90%</label>
+				<label id = "lblHistogramV10" class="lblHistogramV">100%</label>
+				
+				<canvas id="cvColorMap" style="border: none; position: absolute; left: 60; top: 14;" width="800" height="390"></canvas>
+				<div id="divColorMapBounds" style="position: absolute; pointer-events: none"></div>
+			</div>
+			<div id="RightControlSection" align="right">
+				<input class="button" type="image" id="cmdColormap" src="colorMapButton.png" align="right" onclick="toggleColorPicker()"/>
+				<input class="button" type="image" id="cmdTrash2" src="trashButton.png" align="right"/>
+				<input class="button" type="image" id="cmdSaveColormap" src="saveColorMapButton.png" align="right" onclick="saveColormap();"/>
+				<div id="divHistogramAlpha">
+					<input class="button" type="image" id="cmdHistogram" src="histogramButton.png" align="right" onclick="onHistogramButtonPressed();"/>
+					<input class="button" type="image" id="cmdAlpha" src="alphaButton.png" align="right" onclick="onAlphaButtonPressed();" style="display: none"/>
+					<input class="button" type="image" id="cmdHistogramAlpha" src="histogramAlphaButton.png" align="right" onclick="onHistogramAlphaButtonPressed();" style="display: none"/>
+				</div>
+			</div>
+		</div>
+	</div>
+	
+	<div id="downloadColormapDialog" title="Download Colormap">
+		<p>Select output format ...</p>
+	</div>
+	
+	<a id="aDownload" download="image.png"></a>
+
+<script>
+	var downloadColormapDialog = $("#downloadColormapDialog").dialog({
+		autoOpen: false,
+		modal: true,
+		resizable: false,
+		buttons: {
+			XML: function() {
+				downloadColormapDialog.dialog("close");
+				saveColormapXML();
+			},
+			JSON: function() {
+				downloadColormapDialog.dialog("close");
+				saveColormapJSON();
+			},
+			PNG: function() {
+				downloadColormapDialog.dialog("close");
+				saveColormapPNG();
+			}
+		},
+	});
+	var downloader = document.getElementById("aDownload");
+	
+	var imageCanvas, colorMapCanvas;
+	var colormapPicker;
+	var cvAll = [];
+	var lblHistogramH = [], lblHistogramV = [];
+	
+	var actionManager;
+	
+	var COLOR_MAP_SIZE = 1024;//32;
+	var HISTOGRAM_SIZE = 200.0;
+	var colorMaps = [];
+
+	var fileDropIsCopy = false;
+	
+	function onLoad()
+	{
+		lblHistogramH.push(document.getElementById('lblHistogramH0'));
+		lblHistogramH.push(document.getElementById('lblHistogramH1'));
+		lblHistogramH.push(document.getElementById('lblHistogramH2'));
+		lblHistogramH.push(document.getElementById('lblHistogramH3'));
+		lblHistogramH.push(document.getElementById('lblHistogramH4'));
+		lblHistogramH.push(document.getElementById('lblHistogramH5'));
+		lblHistogramH.push(document.getElementById('lblHistogramH6'));
+		lblHistogramH.push(document.getElementById('lblHistogramH7'));
+		lblHistogramH.push(document.getElementById('lblHistogramH8'));
+		lblHistogramH.push(document.getElementById('lblHistogramH9'));
+		lblHistogramH.push(document.getElementById('lblHistogramH10'));
+		
+		lblHistogramV.push(document.getElementById('lblHistogramV0'));
+		lblHistogramV.push(document.getElementById('lblHistogramV1'));
+		lblHistogramV.push(document.getElementById('lblHistogramV2'));
+		lblHistogramV.push(document.getElementById('lblHistogramV3'));
+		lblHistogramV.push(document.getElementById('lblHistogramV4'));
+		lblHistogramV.push(document.getElementById('lblHistogramV5'));
+		lblHistogramV.push(document.getElementById('lblHistogramV6'));
+		lblHistogramV.push(document.getElementById('lblHistogramV7'));
+		lblHistogramV.push(document.getElementById('lblHistogramV8'));
+		lblHistogramV.push(document.getElementById('lblHistogramV9'));
+		lblHistogramV.push(document.getElementById('lblHistogramV10'));
+		
+		actionManager = new ActionManager(
+			document.getElementById('cmdUndo'),
+			document.getElementById('cmdUndo2'),
+			document.getElementById('cmdRedo'),
+			document.getElementById('cmdRedo2')
+		);
+		
+		var tableColorMapPicker = document.getElementById('tableColorMapPicker');
+		tableColorMapPicker.ondrop = handleColorMapDrop;
+		tableColorMapPicker.ondragover = function(event) {
+			if(event.dataTransfer.types == null)
+				return;
+			for(var i = 0; i < event.dataTransfer.types.length; ++i)
+				if(event.dataTransfer.types[i] === 'Files')
+				{
+					event.preventDefault();
+					return;
+				}
+		}
+		
+		var cvImage = document.getElementById('cvImage');
+		cvAll.push(imageCanvas = new ImageCanvas(cvImage, document.getElementById('ImageSection')));
+		cvImage.ondrop = handleFileDrop;
+		cvImage.ondragleave = function(event) { imageCanvas.hideHighlight(); };
+		cvImage.ondragover = function(event) {
+			if(event.dataTransfer.types == null)
+				return;
+			for(var i = 0; i < event.dataTransfer.types.length; ++i)
+				if(event.dataTransfer.types[i] === 'Files')
+				{
+					fileDropIsCopy = event.ctrlKey || event.metaKey;
+					event.preventDefault();
+					var targetRect = event.target.getBoundingClientRect()
+					imageCanvas.showHighlight(event.clientX - targetRect.left, event.clientY - targetRect.top);
+					return;
+				}
+		}
+		
+		var cvColorMap = document.getElementById('cvColorMap');
+		cvAll.push(colorMapCanvas = new ColorMapCanvas(cvColorMap, document.getElementById('divColorMap'), document.getElementById('divColorMapBounds')));
+		onHistogramAlphaButtonPressed();
+		
+		document.onkeydown = handleKeyDown;
+		document.onkeyup = handleKeyUp;
+		cvAll.forEach(function(canvas){
+			canvas.canvas.onmousedown = handleMouseDown;
+			canvas.canvas.onmouseleave = handleMouseLeave;
+			if(canvas.onTouchStart != null)
+				canvas.canvas.addEventListener("touchstart", canvas.onTouchStart, false);
+			if(canvas.onTouchMove != null)
+				canvas.canvas.addEventListener("touchmove", canvas.onTouchMove, false);
+			if(canvas.onTouchEnd != null)
+				canvas.canvas.addEventListener("touchend", canvas.onTouchEnd, false);
+		});
+		document.onmouseup = handleMouseUp;
+		document.onmousemove = handleMouseMove;
+	
+		// Add mouse wheel handler
+		// Code block from "http://www.javascriptkit.com/javatutors/onmousewheel.shtml"
+		var mousewheelevt = (/Firefox/i.test(navigator.userAgent)) ? "DOMMouseScroll" : "mousewheel";
+		if (document.attachEvent)
+			document.attachEvent("on" + mousewheelevt, handleMouseWheel);
+		else if(document.addEventListener)
+			document.addEventListener(mousewheelevt, handleMouseWheel, false);
+		// End code block from "http://www.javascriptkit.com/javatutors/onmousewheel.shtml"
+	
+		cvAll.forEach(function(canvas){
+			// Prevent context menu from showing up on right mouse button click
+			// Code block from "http://stackoverflow.com/questions/8370213/block-right-clicks-in-canvas-with-webgl-context"
+			canvas.canvas.addEventListener("contextmenu", function(event) {
+				if(event.button === 2)
+				{
+					event.preventDefault();
+					return false;
+				}
+			}, false);
+			// End code block from "http://stackoverflow.com/questions/8370213/block-right-clicks-in-canvas-with-webgl-context"
+		});
+		
+		// >>> Create color picker table
+		
+		colormapPicker = new ColorMapPicker();
+		readColorMapsFromXml("ColorMaps.xml", COLOR_MAP_SIZE, onColorMapsLoaded);
+		
+		var solidColorMaps = [];
+		/*solidColorMaps.Red = {name: "Red", group: 'Solid', nanclr: [0.0, 0.0, 0.0], bytes: [255, 0, 0, 255]};
+		solidColorMaps.Orange = {name: "Orange", group: 'Solid', nanclr: [0.0, 0.0, 0.0], bytes: [255, 128, 0, 255]};
+		solidColorMaps.Yellow = {name: "Yellow", group: 'Solid', nanclr: [0.0, 0.0, 0.0], bytes: [255, 255, 0, 255]};
+		solidColorMaps.Green = {name: "Green", group: 'Solid', nanclr: [0.0, 0.0, 0.0], bytes: [0, 255, 0, 255]};
+		solidColorMaps.Blue = {name: "Blue", group: 'Solid', nanclr: [0.0, 0.0, 0.0], bytes: [0, 0, 255, 255]};
+		solidColorMaps.White = {name: "White", group: 'Solid', nanclr: [0.0, 0.0, 0.0], bytes: [255, 255, 255, 255]};
+		solidColorMaps.Gray = {name: "Gray", group: 'Solid', nanclr: [0.0, 0.0, 0.0], bytes: [128, 128, 128, 255]};
+		solidColorMaps.Black = {name: "Black", group: 'Solid', nanclr: [0.5, 0.5, 0.5], bytes: [0, 0, 0, 255]};*/
+		
+		solidColorMaps.Blue = {name: "Blue", group: 'Solid', nanclr: [0.0, 0.0, 0.0], bytes: [45, 81, 163, 255]};
+		solidColorMaps.LightBlue = {name: "Light Blue", group: 'Solid', nanclr: [0.0, 0.0, 0.0], bytes: [142, 183, 255, 255]};
+		solidColorMaps.Green = {name: "Green", group: 'Solid', nanclr: [0.0, 0.0, 0.0], bytes: [17, 140, 77, 255]};
+		solidColorMaps.LightGreen = {name: "Light Green", group: 'Solid', nanclr: [0.0, 0.0, 0.0], bytes: [150, 186, 122, 255]};
+		solidColorMaps.Purple = {name: "Purple", group: 'Solid', nanclr: [0.0, 0.0, 0.0], bytes: [86, 38, 85, 255]};
+		solidColorMaps.Pink = {name: "Pink", group: 'Solid', nanclr: [0.0, 0.0, 0.0], bytes: [206, 155, 196, 255]};
+		solidColorMaps.Yellow = {name: "Yellow", group: 'Solid', nanclr: [0.0, 0.0, 0.0], bytes: [244, 229, 83, 255]};
+		solidColorMaps.LightYellow = {name: "Light Yellow", group: 'Solid', nanclr: [0.0, 0.0, 0.0], bytes: [242, 235, 148, 255]};
+		solidColorMaps.Orange = {name: "Orange", group: 'Solid', nanclr: [0.0, 0.0, 0.0], bytes: [247, 158, 67, 255]};
+		solidColorMaps.LightOrange = {name: "Light Orange", group: 'Solid', nanclr: [0.0, 0.0, 0.0], bytes: [249, 187, 123, 255]};
+		solidColorMaps.Red = {name: "Red", group: 'Solid', nanclr: [0.0, 0.0, 0.0], bytes: [232, 62, 36, 255]};
+		solidColorMaps.LightRed = {name: "Light Red", group: 'Solid', nanclr: [0.0, 0.0, 0.0], bytes: [239, 127, 109, 255]};
+		solidColorMaps.Black = {name: "Black", group: 'Solid', nanclr: [0.0, 0.0, 0.0], bytes: [35, 31, 32, 255]};
+		solidColorMaps.Brown = {name: "Brown", group: 'Solid', nanclr: [0.0, 0.0, 0.0], bytes: [115, 85, 32, 255]};
+		solidColorMaps.DarkGray = {name: "Dark Gray", group: 'Solid', nanclr: [0.0, 0.0, 0.0], bytes: [90, 87, 82, 255]};
+		solidColorMaps.Gray = {name: "Gray", group: 'Solid', nanclr: [0.0, 0.0, 0.0], bytes: [150, 145, 137, 255]};
+		solidColorMaps.LightGray = {name: "Light Gray", group: 'Solid', nanclr: [0.0, 0.0, 0.0], bytes: [188, 184, 167, 255]};
+		solidColorMaps.White = {name: "White", group: 'Solid', nanclr: [0.0, 0.0, 0.0], bytes: [255, 255, 255, 255]};
+		
+		onColorMapsLoaded(solidColorMaps);
+		
+		// >>> Register actions
+		
+		actionManager.register('ImportColormaps', onColorMapsLoaded, onColorMapsUnloaded);
+		
+/*var image = new Image();
+image.onload = function() {
+	imageCanvas.loadImage("DEBUG.png", image, null, false);
+	setHistogramResolution();
+};
+image.src = "DEBUG.png";*/
+
+	/*var image = new Image();
+	image.src = 'debug_bg.png';
+	image.onload = function() {
+	imageCanvas.loadImage('debug_bg.png', image, null, false, false);
+
+	image = new Image();
+	image.src = 'debug_layer3.png';
+	image.onload = function() {
+		imageCanvas.loadImage('debug_layer3.png', image, null, true, true);
+		
+		image = new Image();
+		image.src = 'debug_layer2.png';
+		image.onload = function() {
+			imageCanvas.loadImage('debug_layer2.png', image, null, true, true);
+			
+			image = new Image();
+			image.src = 'debug_layer1.png';
+			image.onload = function() {
+				imageCanvas.loadImage('debug_layer1.png', image, null, true, true);
+				
+				image = new Image();
+				image.src = 'debug_layer0.png';
+				image.onload = function() {
+					imageCanvas.loadImage('debug_layer0.png', image, null, true, true);
+					setHistogramResolution();
+				};
+			};
+		};
+	};
+};*/
+
+showColorPicker();
+
+	}
+	
+	function onColorMapsLoaded(newColorMaps)
+	{
+		// Make colormap name unique
+		var pickerChanged = false;
+		for(var key in newColorMaps)
+		{
+			if(key === "_default")
+				colorMaps._default = newColorMaps._default;
+			else
+			{
+				// Find unique key
+				var uniquekey = key;
+				var idx = 1;
+				while(colorMaps[uniquekey] != null)
+					uniquekey = key + " [" + ++idx + "]";
+				
+				// Update name field of colormap
+				newColorMaps[key].name = uniquekey;
+				
+				// Append newColorMaps[key] to colorMaps under uniquekey
+				colorMaps[uniquekey] = newColorMaps[key];
+				
+				if(newColorMaps[key].inPicker)
+					pickerChanged = true;
+			}
+		}
+		
+		// Replace colormap names of embedded colormap sections with colormaps
+		for(var colorMapName in newColorMaps)
+			if(colorMapName !== "_default" && newColorMaps[colorMapName].sections) // If the loaded colormap contains sections and splitters
+			{
+				var colormap = newColorMaps[colorMapName];
+				colormap.sections.forEach(function(section) {
+					var cm = colorMaps[section.colorMap]; // Find section colormap by name
+					if(cm) // If a colormap with the same name exists, ...
+						section.colorMap = cm; // Use existing colormap
+					else // If colormap wasn't found by name
+					{
+						if(section.colorMap.interpolatedColorMap == null) // If section.colorMap == solid color, ...
+						{
+							// Try to reproduce this solid-color colormap by its name
+							var clrstr = section.colorMap;
+							if (clrstr.length = 8 && clrstr[0] === '0' && clrstr[1] === 'x')
+							{
+								var r = parseInt(clrstr.substr(2, 2), 16);
+								var g = parseInt(clrstr.substr(4, 2), 16);
+								var b = parseInt(clrstr.substr(6, 2), 16);
+								if (r >= 0 && r < 256 && g >= 0 && g < 256 && b >= 0 && b < 256)
+								{
+									var recreatedColormap = {
+										name: section.colorMap,
+										group: 'Solid',
+										nanclr: [0.0, 0.0, 0.0],
+										bytes: [r, g, b, 255],
+										inPicker: false
+									};
+									var recreatedColormaps = [];
+									recreatedColormaps[recreatedColormap.name] = recreatedColormap;
+									onColorMapsLoaded(recreatedColormaps);
+									section.colorMap = recreatedColormap;
+									return;
+								}
+							}
+						}
+
+						// Recreate colormap from control points
+						var colorTable = new InterpolatedColorMap();
+						var controlPointKeys = colormap.interpolatedColorMap.getKeys();
+						var controlPoints = colormap.interpolatedColorMap.getSamples();
+						controlPointKeys.forEach(function(controlPointKey) {
+							var controlPoint = controlPoints[controlPointKey];
+							if(controlPointKey >= section.start.pos && controlPointKey <= section.end.pos)
+								colorTable.AddColor(controlPointKey, controlPoint[0], controlPoint[1], controlPoint[2]);
+						});
+						
+						var recreatedColormap = {
+							name: section.colorMap,
+							group: "Recreated",
+							nanclr: colormap.nanColor,
+							bytes: colorTable.Create(COLOR_MAP_SIZE),
+							flipped: 0,
+							inPicker: false,
+							interpolatedColorMap: colorTable,
+							//controlPoints: colorTable.getSamples(),
+							//controlPointKeys: colorTable.getKeys(),
+							sections: null,
+							splitters: null
+						};
+						var recreatedColormaps = [];
+						recreatedColormaps[recreatedColormap.name] = recreatedColormap;
+						onColorMapsLoaded(recreatedColormaps);
+						section.colorMap = recreatedColormap;
+						
+						// Information about flipping and cropped regions is lost for recreated colormaps
+						section.flipped = false;
+						section.startValue = 0.0;
+						section.endValue = 1.0;
+					}
+				});
+			}
+		
+		// Create colormap textures
+		imageCanvas.loadColorMapTextures(COLOR_MAP_SIZE);
+		colorMapCanvas.loadColorMapTextures(COLOR_MAP_SIZE);
+		
+		if(pickerChanged)
+			colormapPicker.recreatePicker();
+		
+		return newColorMaps;
+	}
+	function onColorMapsUnloaded(unloadedColorMaps)
+	{
+		var pickerChanged = false;
+		for(var key in unloadedColorMaps)
+			if(key !== "_default")
+			{
+				var colormap = unloadedColorMaps[key];
+				
+				if(colormap.inPicker)
+					pickerChanged = true;
+				
+				if(colormap.sections) // If the loaded colormap contains sections and splitters
+					// Replace colormaps of embedded colormap sections with colormap names
+					colormap.sections.forEach(function(section) { section.colorMap = section.colorMap.name; });
+				
+				// Remove colormap from colorMaps
+				delete colorMaps[key];
+			}
+		
+		if(pickerChanged)
+			colormapPicker.recreatePicker();
+	}
+	
+	function colorMap_onDragStart(event)
+	{
+		event.dataTransfer.setData('ColorMapName', event.target.tag_id);
+		colorMapCanvas.showTrashButtons();
+	}
+	function colorMap_onDragEnd()
+	{
+		colorMapCanvas.hideTrashButtons();
+	}
+	
+	function colorMap_onFlipClick(event)
+	{
+		var canvas = event.target.tag_canvas;
+		var colorMap = event.target.tag_colorMap;
+		
+		colorMap.flipped = !colorMap.flipped;
+
+		var ctx = canvas.getContext("2d");
+		var imgdata = ctx.getImageData(0, 0, COLOR_MAP_SIZE, 1);
+		var colorMap_numpixels = Math.floor(colorMap.bytes.length / 4);
+		for(var i = 0; i < colorMap_numpixels; ++i)
+		{
+			var j = colorMap.flipped == 1 ? colorMap_numpixels - 1 - i : i;
+			imgdata.data[j * 4 + 0] = colorMap.bytes[i * 4 + 0];
+			imgdata.data[j * 4 + 1] = colorMap.bytes[i * 4 + 1];
+			imgdata.data[j * 4 + 2] = colorMap.bytes[i * 4 + 2];
+			imgdata.data[j * 4 + 3] = colorMap.bytes[i * 4 + 3];
+		}
+		for(var y = 0; y < canvas.height; ++y)
+			for(var x = 0; x < COLOR_MAP_SIZE; x += colorMap_numpixels)
+				ctx.putImageData(imgdata, x, y);
+	}
+	
+	/*function getHistogramResolution()
+	{
+		var rangeHistogramResolution = document.getElementById('rangeHistogramResolution');
+		return Math.pow(2, rangeHistogramResolution.value);
+	}*/
+	function setHistogramResolution()
+	{
+		var rangeHistogramResolution = document.getElementById('rangeHistogramResolution');
+		var lblHistogramResolution = document.getElementById('lblHistogramResolution');
+		var resolution = Math.pow(2, rangeHistogramResolution.value);
+		
+		//lblHistogramResolution.innerHTML = resolution;
+		rangeHistogramResolution.style.visibility = 'visible';
+		lblHistogramResolution.style.visibility = 'visible';
+		var histograms = imageCanvas.createHistograms(resolution);
+		if(histograms.length !== 0)
+			colorMapCanvas.updateHistogram(histograms);
+	}
+	
+	function showColorPicker()
+	{
+		var divColorMapPicker = document.getElementById('divColorMapPicker');
+		var divWorkArea = document.getElementById('divWorkArea');
+		
+		divColorMapPicker.style.display = 'inline-block';
+		
+		var ColorMapPickerWidth = divColorMapPicker.offsetWidth;
+		divWorkArea.style.left = ColorMapPickerWidth + 'px';
+		divWorkArea.style.width = '-moz-calc(100% - ' + divWorkArea.style.left + ')';
+		divWorkArea.style.width = '-webkit-calc(100% - ' + divWorkArea.style.left + ')';
+		divWorkArea.style.width = 'calc(100% - ' + divWorkArea.style.left + ')';
+		
+		onResize();
+	}
+	function hideColorPicker()
+	{
+		var divColorMapPicker = document.getElementById('divColorMapPicker');
+		var divWorkArea = document.getElementById('divWorkArea');
+		
+		divColorMapPicker.style.display = 'none';
+		
+		var ColorMapPickerWidth = divColorMapPicker.offsetWidth;
+		divWorkArea.style.left = '0px';
+		divWorkArea.style.width = '100%';
+		
+		onResize();
+	}
+	function toggleColorPicker()
+	{
+		var divColorMapPicker = document.getElementById('divColorMapPicker');
+		if(divColorMapPicker.style.display == 'inline-block')
+			hideColorPicker();
+		else
+			showColorPicker();
+	}
+	
+	function onHistogramButtonPressed()
+	{
+		document.getElementById('cmdHistogram').style.display = 'none';
+		document.getElementById('cmdAlpha').style.display = 'inline-block';
+		document.getElementById('cmdHistogramAlpha').style.display = 'none';
+		colorMapCanvas.hideHistogram();
+		colorMapCanvas.showAlphaCurve();
+	}
+	function onAlphaButtonPressed()
+	{
+		document.getElementById('cmdHistogram').style.display = 'none';
+		document.getElementById('cmdAlpha').style.display = 'none';
+		document.getElementById('cmdHistogramAlpha').style.display = 'inline-block';
+		colorMapCanvas.showHistogram();
+		colorMapCanvas.showAlphaCurve();
+	}
+	function onHistogramAlphaButtonPressed()
+	{
+		document.getElementById('cmdHistogram').style.display = 'inline-block';
+		document.getElementById('cmdAlpha').style.display = 'none';
+		document.getElementById('cmdHistogramAlpha').style.display = 'none';
+		colorMapCanvas.showHistogram();
+		colorMapCanvas.hideAlphaCurve();
+	}
+	
+	function onResize()
+	{
+		var ImageSection = document.getElementById('ImageSection');
+		var ColorMapSection = document.getElementById('ColorMapSection');
+		var divColorMapPicker = document.getElementById('divColorMapPicker');
+		
+		//var cmHeight = window.innerHeight > 2 * HISTOGRAM_SIZE ? HISTOGRAM_SIZE : Math.floor(window.innerHeight / 2);
+		
+		//var cmHeight = window.innerHeight > 2 * HISTOGRAM_SIZE ? Math.floor(window.innerHeight / 4) : Math.floor(window.innerHeight / 2);
+		
+		var cmHeightMin = 128, MinHeight = 512;
+		var cmHeightMax = 256, MaxHeight = 1024;
+		var f = (window.innerHeight - MinHeight) / (MaxHeight - MinHeight);
+		f = Math.max(Math.min(f, 1), 0);
+		//console.log(f);
+		var cmHeight = cmHeightMax * f + cmHeightMin * (1 - f);
+		
+		ImageSection.style.height = window.innerHeight - cmHeight - 20;
+		ColorMapSection.style.top = window.innerHeight - cmHeight;
+		ColorMapSection.style.height = cmHeight - 4;
+		
+		//divColorMapPicker.style["max-height"] = window.innerHeight - cmHeight - 10;
+
+		//ImageSection.style.width = window.innerWidth - 16;
+		//ColorMapSection.style.width = window.innerWidth ;//- 16;
+		
+		var y = document.getElementById('divUndoRedo').offsetTop + document.getElementById('divUndoRedo').offsetHeight;
+		var h = cmHeight - y - 8;
+		var rangeHistogramResolution = document.getElementById('rangeHistogramResolution');
+		if(h > 16)
+		{
+			rangeHistogramResolution.style.top = y;
+			rangeHistogramResolution.style.height = h;
+			rangeHistogramResolution.style.visibility = lblHistogramResolution.style.visibility;
+		}
+		else
+			rangeHistogramResolution.style.visibility = 'hidden';
+		
+		cvAll.forEach(function(canvas){
+			if(typeof(canvas.onResize) == 'function')
+				canvas.onResize();
+		});
+	}
+	onResize();
+
+	function handleFileSelect(event)
+	{
+		var files = event.target.files;
+		if(files.length >= 1)
+		{
+			var reader = new FileReader();
+			reader.onload = function(e) {
+				var image = new Image();
+				image.onload = function() {
+					imageCanvas.loadImage(files[0], image, null, false);
+					setHistogramResolution();
+				}
+				image.src = this.result;
+			};
+			reader.readAsDataURL(files[0]);
+		}
+	}
+	
+	function handleFileDrop(event)
+	{
+		event.preventDefault();
+		event = event || window.event;
+		imageCanvas.hideHighlight();
+		var files = (event.files || event.dataTransfer.files);
+		if(files)
+		{
+			fileDropIsCopy = fileDropIsCopy || event.ctrlKey || event.metaKey;
+			var targetRect = event.target.getBoundingClientRect()
+			var eventX = event.clientX - targetRect.left;
+			var eventY = event.clientY - targetRect.top;
+			var fileExt = files[0].name;
+			if(fileExt != null)
+			{
+				var lastdot = fileExt.lastIndexOf('.');
+				if(lastdot != -1)
+					fileExt = fileExt.substring(lastdot + 1);
+				else
+					fileExt = null;
+			}
+			if(fileExt == "im")
+			{
+				var reader = new FileReader();
+				reader.onload = function(e) {
+					var image = readImImage(new Uint8Array(reader.result));
+					var view = imageCanvas.getOrCreateView(eventX, eventY);
+					imageCanvas.loadImageFromByteArray(files[0].name, image.bytes, image.width, image.height, view, fileDropIsCopy);
+					setHistogramResolution();
+					colorMapCanvas.setValueRange(image.vmin, image.vmax, '');
+				}
+				reader.readAsArrayBuffer(files[0]);
+			}
+			if(fileExt == "fits")
+			{
+/*var fits = new astro.FITS(files[0], function() {
+	var dataunit = this.getDataUnit();
+	console.log("width = " + dataunit.width);
+	console.log("height = " + dataunit.height);
+	console.log("depth = " + dataunit.depth);
+	console.log("bzero = " + dataunit.bzero);
+	console.log("bscale = " + dataunit.bscale);
+	console.log("bitpix = " + dataunit.bitpix);
+	dataunit.getFrame(0, function(array) {
+		var vmin = Number.MAX_VALUE, vmax = Number.MIN_VALUE;
+		array.forEach(function(value) {
+			vmin = Math.min(vmin, value);
+			vmax = Math.max(vmax, value);
+		});
+		var vscale = 1 / (vmax - vmin), numpixels = array.length;
+		for(var i = 0; i < numpixels; ++i)
+			array[i] = (array[i] - vmin) * vscale;
+		//array = new Float32Array(dataunit.width * dataunit.height);
+		var view = imageCanvas.getOrCreateView(eventX, eventY);
+		imageCanvas.loadImageFromFloatArray(files[0].name, array, dataunit.width, dataunit.height, view, fileDropIsCopy);
+		setHistogramResolution();
+		colorMapCanvas.setValueRange(vmin, vmax, '');
+	});
+});*/
+readFitsImage(files[0], function(err) {
+	alert(err);
+}, function(bytes, width, height, vmin, vmax) {
+	var view = imageCanvas.getOrCreateView(eventX, eventY);
+	imageCanvas.loadImageFromByteArray(files[0].name, bytes, width, height, view, fileDropIsCopy);
+	setHistogramResolution();
+	colorMapCanvas.setValueRange(vmin, vmax, '');
+}, function(floats, width, height, vmin, vmax) {
+	var view = imageCanvas.getOrCreateView(eventX, eventY);
+	imageCanvas.loadImageFromFloatArray(files[0].name, floats, width, height, view, fileDropIsCopy);
+	setHistogramResolution();
+	colorMapCanvas.setValueRange(vmin, vmax, '');
+});
+			}
+			else // Default extension: png
+			{
+				// Load image
+				var reader = new FileReader();
+				reader.onload = function(e) {
+					var image = new Image();
+					image.onload = function() {
+						var view = imageCanvas.getOrCreateView(eventX, eventY);
+						imageCanvas.loadImage(files[0].name, image, view, fileDropIsCopy);
+						setHistogramResolution();
+					}
+					image.src = this.result;
+				};
+				reader.readAsDataURL(files[0]);
+				
+				// Load value range from PNG tEXt chunks
+				reader = new FileReader();
+				reader.onload = function () {
+					var chunks = readPngChunks(new Uint8Array(reader.result));
+					//printPngChunks(chunks);
+					if(chunks != null) // If PNG chunks were found:
+					{
+						var meta = getPngMetaData(chunks); // Read tEXt chunks into meta
+						var minValue = meta.MinValue, maxValue = meta.MaxValue;
+						if(minValue != null && maxValue != null)
+						{
+							//var suffix = (minValue.endsWith('%') && maxValue.endsWith('%')) ? '%' : '';
+							var suffix = minValue.substring(("" + parseFloat(minValue)).length);
+							colorMapCanvas.setValueRange(parseFloat(minValue), parseFloat(maxValue), suffix);
+						}
+						else
+							colorMapCanvas.setValueRange(0, 100, '%'); // Default to (0%; 100%)
+					}
+					else
+						colorMapCanvas.setValueRange(0, 100, '%'); // Default to (0%; 100%)
+				}
+				reader.readAsArrayBuffer(files[0]);
+			}
+		}
+	};
+	function handleColorMapDrop(event)
+	{
+		event.preventDefault();
+		event = event || window.event;
+		var files = (event.files || event.dataTransfer.files);
+		if(files)
+			for(var i = 0; i < files.length; ++i)
+			{
+				var reader = new FileReader();
+				reader.onload = function(e) {
+					readColorMapsFromXml(this.result, COLOR_MAP_SIZE, function(newcolormaps) {
+						actionManager.perform('ImportColormaps', newcolormaps);
+					});
+				};
+				reader.readAsDataURL(files[i]);
+			}
+	}
+
+	var ctrlPressed = false;
+	var CTRL = navigator.appVersion.indexOf("Mac") == -1 ? 17 : 224;
+	function handleKeyDown(event)
+	{
+		if(event.keyCode === CTRL)
+			ctrlPressed = true;
+		
+		if(ctrlPressed)
+			switch(event.keyCode)
+			{
+			case 90:
+				event.preventDefault();
+				actionManager.undo();
+				return;
+			case 89:
+				event.preventDefault();
+				actionManager.redo();
+				return;
+			}
+		
+		switch(event.keyCode)
+		{
+		case 37: // Left arrow key
+			imageCanvas.prevImage();
+			setHistogramResolution();
+			return;
+		case 39: // Right arrow key
+			imageCanvas.nextImage();
+			setHistogramResolution();
+			return
+		}
+	}
+	function handleKeyUp(event)
+	{
+		if(event.which === CTRL)
+			ctrlPressed = false;
+	}
+
+	function onColorTableChanged(sections)
+	{
+		imageCanvas.setColorMap(sections);
+		colorMapCanvas.setColorMap(sections);
+	}
+
+	function saveColormap()
+	{
+		downloadColormapDialog.dialog("open");
+	}
+	function saveColormapXML()
+	{
+		var cm = colorMapCanvas.serializeColorMap(new ColormapXmlSerializer());
+		//console.log(cm);
+		downloader.href = "data:application/xml;charset=utf-8," + cm;
+		downloader.download = "colormap.xml";
+		downloader.click();
+	}
+	function saveColormapJSON()
+	{
+		var cm = colorMapCanvas.serializeColorMap(new ColormapJsonSerializer());
+		//console.log(cm);
+		downloader.href = "data:application/json;charset=utf-8," + cm;
+		downloader.download = "colormap.json";
+		downloader.click();
+	}
+	function saveColormapPNG()
+	{
+		var cm = colorMapCanvas.serializeColorMap(new ColormapPngSerializer(1024));
+		downloader.href = cm;
+		downloader.download = "colormap.png";
+		downloader.click();
+	}
+	
+	function saveImages()
+	{
+		var images = imageCanvas.save();
+		
+		if (images.length === 1)
+		{
+			downloader.href = images[0].dataURL;
+			downloader.download = images[0].name;
+			downloader.click();
+		}
+		else if (images.length > 1)
+		{
+			var zip = new JSZip();
+			var filenameCounter = {};
+			images.forEach(function(image) {
+				// Convert base64-dataURL to base64
+				image.dataURL = image.dataURL.substr(image.dataURL.indexOf("base64,") + "base64,".length);
+				
+				// Rename duplicate files
+				var filenameCount = ++filenameCounter[image.name];
+				if (Number.isNaN(filenameCount))
+					filenameCounter[image.name] = 1;
+				else
+					image.name = image.name.substr(0, image.name.length - ".png".length) + " (" + filenameCount + ").png";
+				
+				zip.file(image.name, image.dataURL, {base64: true});
+			});
+			zip.generateAsync({type:"base64"}).then(function(base64) {
+				downloader.href = "data:application/zip;base64," + base64;
+				downloader.download = "images.zip";
+				downloader.click();
+			});
+		}
+	}
+	
+	var ofd = document.getElementById('ofd');
+	if(ofd !== null)
+		ofd.addEventListener('change', handleFileSelect, false);
+</script>
+	
+</body>
+</html>

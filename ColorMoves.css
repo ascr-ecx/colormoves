@@ -1,0 +1,316 @@
+body {
+    margin: 0;
+    text-align: center;
+}
+
+label {
+	z-index: -1;
+}
+
+#divWorkArea {
+	position: absolute;
+	top: 0px;
+	left: 0px;
+	width: 100%;
+	height: 100%;
+}
+
+#ImageSection {
+	/*position: absolute;*/
+	width: -moz-calc(100% - 16);
+    width: -webkit-calc(100% - 16);
+    width: calc(100% - 16);
+	height: 400;
+	
+	border:1px solid black;
+	margin: 8px;
+
+	/*resize: vertical;
+	overflow: auto;*/
+}
+#cvImage {
+	width: 100%;
+	height: 100%;
+}
+#ImageControlSection {
+	width: 200;
+	height: 40;
+	top: -56;
+	margin: 0 auto;
+	position: relative;
+	
+	border-radius: 8px;
+	border: 1px solid;
+	
+	padding: 4px;
+	
+	background-color: white;
+}
+#ImageCloseButton {
+	position: absolute;
+	margin: 4;
+	width: 32;
+	height: 32;
+}
+#ImageFrame {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 0;
+	height: 0;
+	display: none;
+	box-sizing: border-box;
+    background-color: transparent;
+	border: 6px solid;
+	border-color: rgba(200, 255, 200, 200);
+	pointer-events: none;
+	margin: 1px;
+
+    color: black;
+    font-family: monospace;
+    padding: 1em;
+}
+
+#HighlightLine {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 1;
+	height: 100%;
+	display: none;
+    background-color: rgb(0, 255, 0);
+	opacity: 0.8;
+}
+#HighlightLineLabel {
+	position: absolute;
+	left: -32;
+	top: -12;
+	width: 64;
+	height: 16;
+    background-color: white;
+
+	border: 1px solid;
+	border-color: rgba(0, 255, 0, 204);
+
+	color: black;
+    font-family: monospace;
+	overflow: hidden;
+	text-align: center;
+	padding-top: 4;
+}
+#HighlightLineLabel p {
+	padding: 8;
+}
+
+
+#ColorMapSection {
+	/*position: absolute;*/
+	width: 100%;
+	height: 400;
+	/*border: 1px solid black;*/
+	
+	/*resize: vertical;
+    overflow: auto;*/
+	overflow: hidden;
+}
+#LeftControlSection {
+	position: relative;
+	/*width: 5vw;*/
+	width: 5%;
+	height: 100%;
+	max-width: 43; /*82*/
+	float: left;
+}
+#RightControlSection {
+	position: relative;
+	/*width: 5vw;*/
+	width: 5%;
+	height: 100%;
+	max-width: 43;
+	float: right;
+}
+#divColorMap {
+	position: relative;
+	width: 90%;
+	/*width: 90vw;*/
+	/*left: 50;
+	right: 50;*/
+	height: 100%;
+	/*display: inline-block;*/
+	float: left;
+	/*left: 5vw;*/
+	left: 5%;
+}
+
+.lblHistogramV {
+	font-family: "Lucida Sans Unicode", "Lucida Grande", sans-serif;
+	font-size: 12px;
+
+	position: absolute;
+	left: 0;
+	width: 58;
+	text-align: right;
+}
+.lblHistogramH {
+	font-family: "Lucida Sans Unicode", "Lucida Grande", sans-serif;
+	font-size: 12px;
+
+	position: absolute;
+	top: 0;
+	width: 50;
+	text-align: center;
+}
+
+.button {
+	position: relative;
+	top: 0px;
+	left: 0px;
+	width: 5vw;
+	height: 5vw;
+	max-width: 43;
+	max-height: 43;
+	padding-left: 4px;
+	padding-right: 4px;
+}
+.narrowButton {
+	position: relative;
+	top: 0px;
+	left: 0px;
+	width: 50%;
+	height: 100%;
+	padding-left: 0px;
+	padding-right: 0px;
+	float: left;
+}
+#cmdTrash1, #cmdTrash2 {
+	position: relative;
+	top: 0px;
+	left: 0px;
+	width: 5vw;
+	height: 5vw;
+	max-width: 43;
+	max-height: 43;
+	padding-left: 4px;
+	padding-right: 4px;
+	/*visibility: hidden;*/
+	display: none;
+}
+#rangeHistogramResolution {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 136;
+	visibility: hidden;
+	writing-mode: bt-lr;
+	-webkit-appearance: slider-vertical;
+}
+
+#divColorMapPicker {
+	top: 0px;
+	left: 0px;
+	/*width: 100%;*/
+width: 200px;
+height: 100%;
+	z-index: 2;
+	position: fixed;
+	background-color: transparent;
+	overflow: auto;
+	display: none;
+}
+#tableColorMapPicker {
+	/*width: 100%;*/
+width: 100%;
+/*height: 100%;*/
+overflow: scroll;
+	table-layout: fixed;
+	
+	border: 1px solid #e3e3e3;
+	background-color: #f2f2f2;
+	-webkit-border-radius: 6px;
+	-moz-border-radius: 6px;
+}
+#tableColorMapPicker td, #tableColorMapPicker th {
+	/*padding: 5px;*/
+	color: #333;
+}
+#tableColorMapPicker thead {
+	font-family: "Lucida Sans Unicode", "Lucida Grande", sans-serif;
+	font-size: 18px;
+	text-align: left;
+}
+#tableColorMapPicker thead th {
+	background: -moz-linear-gradient(top, #F0F0F0 0, #DBDBDB 100%);
+	background: -webkit-gradient(linear, left top, left bottom, color-stop(0%, #F0F0F0), color-stop(100%, #DBDBDB));
+	filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#F0F0F0', endColorstr='#DBDBDB', GradientType=0);
+	border: 1px solid #B0B0B0;
+	color: #444;
+	font-weight: bold;
+	padding: 3px 10px;
+}
+#tableColorMapPicker td {
+	vertical-align: top;
+	overflow: hidden;
+	white-space: nowrap;
+}
+#tableColorMapPicker td:hover > #tableColorMapPicker_canvas {
+	width: -moz-calc(100% - 16px);
+    width: -webkit-calc(100% - 16px);
+    width: calc(100% - 16px);
+}
+#tableColorMapPicker td:hover > #tableColorMapPicker_canvas_s {
+	width: 100%;
+}
+#tableColorMapPicker td:hover > #tableColorMapPicker_button {
+	display: inline-block;
+}
+#tableColorMapPicker td:hover > #tableColorMapPicker_label {
+	display: none;
+}
+#tableColorMapPicker_button {
+	width: 16px;
+	height: 16px;
+	vertical-align: top;
+	display: none;
+}
+#tableColorMapPicker_canvas {
+	position: relative;
+	width:30%;
+	height:16px;
+	vertical-align: top;
+}
+#tableColorMapPicker_canvas_s {
+	position: relative;
+	width:30%;
+	height:16px;
+	vertical-align: top;
+}
+#tableColorMapPicker_label {
+	padding-left: 1%;
+	width: 69%;
+	height: 16px;
+	display: inline-block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	
+	font-family: "Lucida Sans Unicode", "Lucida Grande", sans-serif;
+	font-size: 12px;
+}
+#tableColorMapPicker_addclrimg {
+	position: relative;
+	width: 16px;
+	height: 16px;
+	vertical-align: top;
+	border: 1px solid black;
+}
+#tableColorMapPicker_addclr {
+	position: relative;
+	top: 0;
+	left: -18px;
+	width: 18px;
+	height: 18px;
+	vertical-align: top;
+	border: 1px solid black;
+	opacity: 0;
+}
