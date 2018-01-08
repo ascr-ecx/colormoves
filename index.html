@@ -1253,7 +1253,7 @@ readFitsImage(files[0], function(err) {
 	}
 	function saveColormapPNG()
 	{
-		var cm = colorMapCanvas.serializeColorMap(new ColormapPngSerializer(1024));
+		var cm = colorMapCanvas.serializeColorMap(new ColormapPngSerializer(1024, 32));
 		downloader.href = cm;
 		downloader.download = "colormap.png";
 		downloader.click();

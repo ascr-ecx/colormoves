@@ -288,11 +288,11 @@ function ColormapJsonSerializer()
 	}
 }
 
-function ColormapPngSerializer(size)
+function ColormapPngSerializer(width, height)
 {
 	var points = [];
-	var colormapBytes = new Uint8Array(4 * size);
-	for (var i = 0; i < 4 * size; ++i)
+	var colormapBytes = new Uint8Array(4 * width);
+	for (var i = 0; i < 4 * width; ++i)
 		colormapBytes[i] = 0;
 	
 	this.colormapStart = function(group, name) { }
@@ -313,9 +313,9 @@ function ColormapPngSerializer(size)
 				points.splice(i, 1);
 			}
 		
-		var startPos = Math.max(0, Math.min(size - 1, Math.floor(section.start.pos * size)));
-		var endPos = Math.max(0, Math.min(size - 1, Math.floor(section.end.pos * size)));
-		var len = endPos - startPos;
+		var startPos = Math.max(0, Math.min(width - 1, Math.floor(section.start.pos * width)));
+		var endPos = Math.max(0, Math.min(width - 1, Math.floor(section.end.pos * width)));
+		var len = endPos - startPos + 1;
 		var bytes = interpolatedColormap.Create(len);
 		//console.log(startPos);
 		//console.log(endPos);
@@ -335,13 +335,14 @@ function ColormapPngSerializer(size)
 	{
 		// Create a 2D canvas to store the result 
 		var tempCanvas = document.createElement('canvas');
-		tempCanvas.width = size;
-		tempCanvas.height = 1;
+		tempCanvas.width = width;
+		tempCanvas.height = height;
 		
 		// Copy the pixels to a 2D canvas
-		var imageData = tempCanvas.getContext('2d').createImageData(size, 1);
+		var imageData = tempCanvas.getContext('2d').createImageData(width, 1);
 		imageData.data.set(colormapBytes);
-		tempCanvas.getContext('2d').putImageData(imageData, 0, 0);
+		for (var y = 0; y < height; ++y)
+			tempCanvas.getContext('2d').putImageData(imageData, 0, y);
 		
 		return tempCanvas.toDataURL();
 	}
