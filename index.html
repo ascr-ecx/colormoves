@@ -456,23 +456,23 @@ return;*/
 			<canvas id="cvImage" width="800" height="400"></canvas>
 			
 			<div id="ImageControlSection">
-				<input class="button" type="image" id="saveImageButton" src="saveImageButton.png" onclick="saveImages();"/>
+				<input class="button" title="Save Image" type="image" id="saveImageButton" src="saveImageButton.png" onclick="saveImages();"/>
 				<!--<input class="button" type="image" id="saveImageButton" src="saveImageButton.png" onclick="imageCanvas.save();"/>-->
-				<input class="button" type="image" id="zoomFitButton" src="zoomFitButton.png" onclick="imageCanvas.zoomFit()"/>
-				<input class="button" type="image" id="zoomResetButton" src="zoomResetButton.png" onclick="imageCanvas.zoomReset()"/>
+				<input class="button" title="Zoom to Fit" type="image" id="zoomFitButton" src="zoomFitButton.png" onclick="imageCanvas.zoomFit()"/>
+				<input class="button" title="Reset Zoom" type="image" id="zoomResetButton" src="zoomResetButton.png" onclick="imageCanvas.zoomReset()"/>
 			</div>
 		</div>
 		
 		<div id="ColorMapSection">
 			<div id="LeftControlSection" align="left">
-				<input class="button" type="image" id="cmdSplitter" src="splitterButton.png" onclick="/*hideColorPicker();*/ var canvas = document.getElementById('cvColorMap'); canvas.style.cursor = canvas.style.cursor.indexOf('splitterCursor') != -1 ? CURSOR_DEFAULT : 'url(splitterCursor.png), auto';"/>
-				<input class="button" type="image" id="cmdTrash1" src="trashButton.png"/>
-				<input class="button" type="image" id="cmdInterjector" src="interjectorButton.png" onclick="/*hideColorPicker();*/ var canvas = document.getElementById('cvColorMap'); canvas.style.cursor = canvas.style.cursor.indexOf('interjectorCursor') != -1 ? CURSOR_DEFAULT : 'url(interjectorCursor.png) 9 0, auto';"/>
+				<input class="button" title="Split Colormap" type="image" id="cmdSplitter" src="splitterButton.png" onclick="/*hideColorPicker();*/ var canvas = document.getElementById('cvColorMap'); canvas.style.cursor = canvas.style.cursor.indexOf('splitterCursor') != -1 ? CURSOR_DEFAULT : 'url(splitterCursor.png), auto';"/>
+				<input class="button" title="Delete" type="image" id="cmdTrash1" src="trashButton.png"/>
+				<input class="button" title="Insert Colormap" type="image" id="cmdInterjector" src="interjectorButton.png" onclick="/*hideColorPicker();*/ var canvas = document.getElementById('cvColorMap'); canvas.style.cursor = canvas.style.cursor.indexOf('interjectorCursor') != -1 ? CURSOR_DEFAULT : 'url(interjectorCursor.png) 9 0, auto';"/>
 				<div class="button" id="divUndoRedo">
-					<input class="narrowButton" type="image" id="cmdUndo" src="undoButton.png" onclick="actionManager.undo();"/>
-					<input class="narrowButton" type="image" id="cmdUndo2" src="undoButton2.png" onclick="actionManager.undo();" style="display: none"/>
-					<input class="narrowButton" type="image" id="cmdRedo" src="redoButton.png" onclick="actionManager.redo();"/>
-					<input class="narrowButton" type="image" id="cmdRedo2" src="redoButton2.png" onclick="actionManager.redo();" style="display: none"/>
+					<input class="narrowButton" title="Undo" type="image" id="cmdUndo" src="undoButton.png" onclick="actionManager.undo();"/>
+					<input class="narrowButton" title="Undo" type="image" id="cmdUndo2" src="undoButton2.png" onclick="actionManager.undo();" style="display: none"/>
+					<input class="narrowButton" title="Redo" type="image" id="cmdRedo" src="redoButton.png" onclick="actionManager.redo();"/>
+					<input class="narrowButton" title="Redo" type="image" id="cmdRedo2" src="redoButton2.png" onclick="actionManager.redo();" style="display: none"/>
 				</div>
 				<label id="lblHistogramResolution" style="position: relative; top:166px; visibility: hidden"></label>
 				<input id="rangeHistogramResolution" type="range" orient="vertical" min="4" max="16" value="8" step="1" oninput="setHistogramResolution()">
@@ -506,13 +506,13 @@ return;*/
 				<div id="divColorMapBounds" style="position: absolute; pointer-events: none"></div>
 			</div>
 			<div id="RightControlSection" align="right">
-				<input class="button" type="image" id="cmdColormap" src="colorMapButton.png" align="right" onclick="toggleColorPicker()"/>
-				<input class="button" type="image" id="cmdTrash2" src="trashButton.png" align="right"/>
-				<input class="button" type="image" id="cmdSaveColormap" src="saveColorMapButton.png" align="right" onclick="saveColormap();"/>
+				<input class="button" title="Toggle Color Picker" type="image" id="cmdColormap" src="colorMapButton.png" align="right" onclick="toggleColorPicker()"/>
+				<input class="button" title="Delete" type="image" id="cmdTrash2" src="trashButton.png" align="right"/>
+				<input class="button" title="Download Colormap" type="image" id="cmdSaveColormap" src="saveColorMapButton.png" align="right" onclick="saveColormap();"/>
 				<div id="divHistogramAlpha">
-					<input class="button" type="image" id="cmdHistogram" src="histogramButton.png" align="right" onclick="onHistogramButtonPressed();"/>
-					<input class="button" type="image" id="cmdAlpha" src="alphaButton.png" align="right" onclick="onAlphaButtonPressed();" style="display: none"/>
-					<input class="button" type="image" id="cmdHistogramAlpha" src="histogramAlphaButton.png" align="right" onclick="onHistogramAlphaButtonPressed();" style="display: none"/>
+					<input class="button" title="Enable Opacity Control" type="image" id="cmdHistogram" src="histogramButton.png" align="right" onclick="onHistogramButtonPressed();"/>
+					<input class="button" title="Enable Opacity Control with Histogram" type="image" id="cmdAlpha" src="alphaButton.png" align="right" onclick="onAlphaButtonPressed();" style="display: none"/>
+					<input class="button" title="Disable Opacity Control" type="image" id="cmdHistogramAlpha" src="histogramAlphaButton.png" align="right" onclick="onHistogramAlphaButtonPressed();" style="display: none"/>
 				</div>
 			</div>
 		</div>

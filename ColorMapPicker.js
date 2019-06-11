@@ -161,7 +161,8 @@ function ColorMapPicker()
 		addclr.id = "tableColorMapPicker_addclr";
 		addclr.type = "color";
 		addclr.src = "addColorButton.png"
-		var hex = function(v) { var str = v.toString(16); return ('00'+str).substring(str.length); };
+		addclr.title = "Add Custom Color"
+    var hex = function(v) { var str = v.toString(16); return ('00'+str).substring(str.length); };
 		addclr.onclick = function() {
 			var r = parseInt(this.value.slice(1, 3), 16);
 			var g = parseInt(this.value.slice(3, 5), 16);
