@@ -478,7 +478,8 @@ return;*/
 				<input id="rangeHistogramResolution" type="range" orient="vertical" min="4" max="16" value="8" step="1" oninput="setHistogramResolution()">
 			</div>
 			<div id="divColorMap">
-				<label id = "lblHistogramH0" class="lblHistogramH">0%</label>
+				<input id = "lblHistogramH0" class="lblHistogramH" type="text" value="0"
+				onchange="setValueRange()" />
 				<label id = "lblHistogramH1" class="lblHistogramH">10%</label>
 				<label id = "lblHistogramH2" class="lblHistogramH">20%</label>
 				<label id = "lblHistogramH3" class="lblHistogramH">30%</label>
@@ -488,8 +489,9 @@ return;*/
 				<label id = "lblHistogramH7" class="lblHistogramH">70%</label>
 				<label id = "lblHistogramH8" class="lblHistogramH">80%</label>
 				<label id = "lblHistogramH9" class="lblHistogramH">90%</label>
-				<label id = "lblHistogramH10" class="lblHistogramH">100%</label>
-				
+				<input id = "lblHistogramH10" class="lblHistogramH" type="text" value="100"
+				onchange="setValueRange()" />
+
 				<label id = "lblHistogramV0" class="lblHistogramV">0%</label>
 				<label id = "lblHistogramV1" class="lblHistogramV">10%</label>
 				<label id = "lblHistogramV2" class="lblHistogramV">20%</label>
@@ -966,6 +968,12 @@ showColorPicker();
 			hideColorPicker();
 		else
 			showColorPicker();
+	}
+
+	function setValueRange()
+	{
+		alert(document.getElementById('lblHistogramH0').value)
+		colorMapCanvas.setValueRange(document.getElementById('lblHistogramH0').value,document.getElementById('lblHistogramH10').value,'%');
 	}
 	
 	function onHistogramButtonPressed()
