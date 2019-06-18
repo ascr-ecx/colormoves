@@ -421,13 +421,15 @@ setColorMap(gl, sdrAlphaLine, sections, function(section) {return section.colorM
 	{
 		if(suffix === null)
 			suffix = "";
-
+		// Convert string to number
+		min = min * 1;
+		max = max * 1;
 		minValue = min;
 		maxValue = max;
 		valueSuffix = suffix;
 
 		for(var i = 0; i <= 10; ++i)
-			lblHistogramH[i].innerHTML = "" + (min + i * (max - min) / 10.0) + suffix;
+			lblHistogramH[i].innerHTML = "" + (min + i * (max - min) / 10.0).toFixed(2) + suffix;
 	}
 	this.setValueRange(0, 100, '%');
 	
