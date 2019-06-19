@@ -429,7 +429,7 @@ setColorMap(gl, sdrAlphaLine, sections, function(section) {return section.colorM
 		valueSuffix = suffix;
 
 		for(var i = 0; i <= 10; ++i)
-			lblHistogramH[i].innerHTML = "" + (min + i * (max - min) / 10.0).toFixed(2) + suffix;
+			lblHistogramH[i].innerHTML = "" + (min + i * (max - min) / 10.0).toPrecision(3) + suffix;
 	}
 	this.setValueRange(0, 100, '%');
 	
