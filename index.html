@@ -474,11 +474,11 @@ return;*/
 					<input class="narrowButton" title="Redo" type="image" id="cmdRedo" src="redoButton.png" onclick="actionManager.redo();"/>
 					<input class="narrowButton" title="Redo" type="image" id="cmdRedo2" src="redoButton2.png" onclick="actionManager.redo();" style="display: none"/>
 				</div>
-				<label id="lblHistogramResolution" style="position: relative; top:166px; visibility: hidden"></label>
+				<label id="lblHistogramResolution" title="Histogram Resolution" style="position: relative; top:166px; visibility: hidden"></label>
 				<input id="rangeHistogramResolution" type="range" orient="vertical" min="4" max="16" value="8" step="1" oninput="setHistogramResolution()">
 			</div>
 			<div id="divColorMap">
-				<input id = "lblHistogramH0" class="lblHistogramHIn" type="number" step="1" value="0" autocomplete="off" onchange="setValueRange()" on/>
+				<input id = "lblHistogramH0" class="lblHistogramHIn" type="number" step="1" value="0" autocomplete="off" onchange="setValueRange()" />
 				<label id = "lblHistogramH1" class="lblHistogramH">10</label>
 				<label id = "lblHistogramH2" class="lblHistogramH">20</label>
 				<label id = "lblHistogramH3" class="lblHistogramH">30</label>
@@ -970,7 +970,9 @@ showColorPicker();
 
 	function setValueRange()
 	{
-		colorMapCanvas.setValueRange(document.getElementById('lblHistogramH0').value,document.getElementById('lblHistogramH10').value);
+		var histogramH0 = document.getElementById('lblHistogramH0').value;
+		var histogramH10 = document.getElementById('lblHistogramH10').value;
+		colorMapCanvas.setValueRange(histogramH0,histogramH10);
 	}
 	
 	function onHistogramButtonPressed()

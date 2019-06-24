@@ -1827,10 +1827,10 @@ setColorMap(gl, sdrAlphaLine, sections, function(section) {return section.colorM
 		{
 			highlightLine.style.display = "inline-block";
 			highlightLine.style.left = location;
-			var lowerLabelBound = Number(document.getElementById('lblHistogramH0').innerHTML);
-			var upperLabelBound = Number(document.getElementById('lblHistogramH10').innerHTML);
+			var lowerLabelBound = Number(document.getElementById('lblHistogramH0').value);
+			var upperLabelBound = Number(document.getElementById('lblHistogramH10').value);
 			if (ENABLE_HIGHLIGHT_LABEL)
-				highlightLineLabel.innerText = Number((upperLabelBound - lowerLabelBound) * value + lowerLabelBound).toPrecision(6);
+				highlightLineLabel.innerText = Number((upperLabelBound - lowerLabelBound) * value + lowerLabelBound).toPrecision(4);
 		}
 	}
 
