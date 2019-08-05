@@ -279,11 +279,18 @@ setColorMap(gl, sdrAlphaLine, sections, function(section) {return section.colorM
 		divBounds.style.height = canvas.offsetHeight;
 
 		repositionHistogramLabels();
+		if(ENABLE_HIGHLIGHT_LABEL)
+			repositionHighlightLineLabel();
 		recreateAlphaCurveMeshes();
 		requestAnimFrame(render);
 	}
 	this.onResize();
 	
+	function repositionHighlightLineLabel()
+	{
+		highlightLineLabel.style.bottom = canvas.height * 0.11;
+	}
+
 	function repositionHistogramLabels()
 	{
 		var v = vec3.create();

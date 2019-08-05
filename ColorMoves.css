@@ -121,6 +121,15 @@ label {
 	max-width: 43; /*82*/
 	float: left;
 }
+#LeftHistogramResolution {
+	position: relative;
+	/*width: 5vw;*/
+	width: 5%;
+	height: 100%;
+	max-width: 43; /*82*/
+	float: left;
+	left: 10px;
+}
 #RightControlSection {
 	position: relative;
 	/*width: 5vw;*/

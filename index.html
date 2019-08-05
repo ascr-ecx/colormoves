@@ -473,7 +473,9 @@ return;*/
 					<input class="narrowButton" title="Undo" type="image" id="cmdUndo2" src="undoButton2.png" onclick="actionManager.undo();" style="display: none"/>
 					<input class="narrowButton" title="Redo" type="image" id="cmdRedo" src="redoButton.png" onclick="actionManager.redo();"/>
 					<input class="narrowButton" title="Redo" type="image" id="cmdRedo2" src="redoButton2.png" onclick="actionManager.redo();" style="display: none"/>
-				</div>
+    			</div>
+    		</div>
+			<div id="LeftHistogramResolution">
 				<label id="lblHistogramResolution" title="Histogram Resolution" style="position: relative; top:166px; visibility: hidden"></label>
 				<input id="rangeHistogramResolution" type="range" orient="vertical" min="4" max="16" value="8" step="1" oninput="setHistogramResolution()">
 			</div>
@@ -1026,8 +1028,8 @@ showColorPicker();
 		//ImageSection.style.width = window.innerWidth - 16;
 		//ColorMapSection.style.width = window.innerWidth ;//- 16;
 		
-		var y = document.getElementById('divUndoRedo').offsetTop + document.getElementById('divUndoRedo').offsetHeight;
-		var h = cmHeight - y - 8;
+		var y = 0;
+		var h = cmHeight - 12;
 		var rangeHistogramResolution = document.getElementById('rangeHistogramResolution');
 		if(h > 16)
 		{
