@@ -140,7 +140,7 @@ label {
 }
 #divColorMap {
 	position: relative;
-	width: 90%;
+	width: 85%;
 	/*width: 90vw;*/
 	/*left: 50;
 	right: 50;*/
@@ -148,7 +148,7 @@ label {
 	/*display: inline-block;*/
 	float: left;
 	/*left: 5vw;*/
-	left: 5%;
+	left: 0%;
 }
 
 .lblHistogramV {
