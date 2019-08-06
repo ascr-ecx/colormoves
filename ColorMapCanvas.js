@@ -10,7 +10,7 @@ CURSOR_MOVE_CROP = isFirefox ? 'grabbing' : 'ew-resize';
 // >>> Options
 ALPHA_MODE = 'SECTION';
 //ALPHA_MODE = 'SPLITTER';
-ENABLE_HIGHLIGHT_LABEL = false;
+ENABLE_HIGHLIGHT_LABEL = true;
 
 
 function ColorMapCanvas(canvas, div, divBounds)
@@ -279,11 +279,18 @@ setColorMap(gl, sdrAlphaLine, sections, function(section) {return section.colorM
 		divBounds.style.height = canvas.offsetHeight;
 
 		repositionHistogramLabels();
+		if(ENABLE_HIGHLIGHT_LABEL)
+			repositionHighlightLineLabel();
 		recreateAlphaCurveMeshes();
 		requestAnimFrame(render);
 	}
 	this.onResize();
 	
+	function repositionHighlightLineLabel()
+	{
+		highlightLineLabel.style.bottom = canvas.height * 0.11;
+	}
+
 	function repositionHistogramLabels()
 	{
 		var v = vec3.create();
@@ -297,7 +304,7 @@ setColorMap(gl, sdrAlphaLine, sections, function(section) {return section.colorM
 				lblHistogramH[i].style.left = 35.5 + (v[0] + 1.0) * canvas.width / 2;
 
 				lblHistogramV[i].style.top = canvas.height * (0.905 - 0.088 * i) + 6.0;
-				lblHistogramV[i].style.visibility = canvas.height > 80 ? 'visible' : 'hidden';
+				lblHistogramV[i].style.visibility = i % 2 ? 'hidden' : 'visible';
 			}
 			else
 				lblHistogramH[i].style.visibility = 'hidden';
@@ -417,19 +424,18 @@ setColorMap(gl, sdrAlphaLine, sections, function(section) {return section.colorM
 			requestAnimFrame(render);
 	}
 
-	this.setValueRange = function(min, max, suffix)
+	this.setValueRange = function(min, max)
 	{
-		if(suffix === null)
-			suffix = "";
-
+		// Convert string to number
+		min = min * 1;
+		max = max * 1;
 		minValue = min;
 		maxValue = max;
-		valueSuffix = suffix;
 
 		for(var i = 0; i <= 10; ++i)
-			lblHistogramH[i].innerHTML = "" + (min + i * (max - min) / 10.0) + suffix;
+			lblHistogramH[i].innerHTML = "" + (min + i * (max - min) / 10.0).toPrecision(3);
 	}
-	this.setValueRange(0, 100, '%');
+	this.setValueRange(0, 100);
 	
 	this.showHistogram = function()
 	{
@@ -1828,8 +1834,10 @@ setColorMap(gl, sdrAlphaLine, sections, function(section) {return section.colorM
 		{
 			highlightLine.style.display = "inline-block";
 			highlightLine.style.left = location;
+			var lowerLabelBound = Number(document.getElementById('lblHistogramH0').value);
+			var upperLabelBound = Number(document.getElementById('lblHistogramH10').value);
 			if (ENABLE_HIGHLIGHT_LABEL)
-				highlightLineLabel.innerText = value.toPrecision(6);
+				highlightLineLabel.innerText = Number((upperLabelBound - lowerLabelBound) * value + lowerLabelBound).toPrecision(4);
 		}
 	}
 

@@ -473,23 +473,25 @@ return;*/
 					<input class="narrowButton" title="Undo" type="image" id="cmdUndo2" src="undoButton2.png" onclick="actionManager.undo();" style="display: none"/>
 					<input class="narrowButton" title="Redo" type="image" id="cmdRedo" src="redoButton.png" onclick="actionManager.redo();"/>
 					<input class="narrowButton" title="Redo" type="image" id="cmdRedo2" src="redoButton2.png" onclick="actionManager.redo();" style="display: none"/>
-				</div>
-				<label id="lblHistogramResolution" style="position: relative; top:166px; visibility: hidden"></label>
+    			</div>
+    		</div>
+			<div id="LeftHistogramResolution">
+				<label id="lblHistogramResolution" title="Histogram Resolution" style="position: relative; top:166px; visibility: hidden"></label>
 				<input id="rangeHistogramResolution" type="range" orient="vertical" min="4" max="16" value="8" step="1" oninput="setHistogramResolution()">
 			</div>
 			<div id="divColorMap">
-				<label id = "lblHistogramH0" class="lblHistogramH">0%</label>
-				<label id = "lblHistogramH1" class="lblHistogramH">10%</label>
-				<label id = "lblHistogramH2" class="lblHistogramH">20%</label>
-				<label id = "lblHistogramH3" class="lblHistogramH">30%</label>
-				<label id = "lblHistogramH4" class="lblHistogramH">40%</label>
-				<label id = "lblHistogramH5" class="lblHistogramH">50%</label>
-				<label id = "lblHistogramH6" class="lblHistogramH">60%</label>
-				<label id = "lblHistogramH7" class="lblHistogramH">70%</label>
-				<label id = "lblHistogramH8" class="lblHistogramH">80%</label>
-				<label id = "lblHistogramH9" class="lblHistogramH">90%</label>
-				<label id = "lblHistogramH10" class="lblHistogramH">100%</label>
-				
+				<input id = "lblHistogramH0" class="lblHistogramHIn" step="any" type="number" value="0" autocomplete="off" onchange="setValueRange()" />
+				<label id = "lblHistogramH1" class="lblHistogramH">10</label>
+				<label id = "lblHistogramH2" class="lblHistogramH">20</label>
+				<label id = "lblHistogramH3" class="lblHistogramH">30</label>
+				<label id = "lblHistogramH4" class="lblHistogramH">40</label>
+				<label id = "lblHistogramH5" class="lblHistogramH">50</label>
+				<label id = "lblHistogramH6" class="lblHistogramH">60</label>
+				<label id = "lblHistogramH7" class="lblHistogramH">70</label>
+				<label id = "lblHistogramH8" class="lblHistogramH">80</label>
+				<label id = "lblHistogramH9" class="lblHistogramH">90</label>
+				<input id = "lblHistogramH10" class="lblHistogramHIn" step="any" type="number" value="100" autocomplete="off" onchange="setValueRange()" />
+
 				<label id = "lblHistogramV0" class="lblHistogramV">0%</label>
 				<label id = "lblHistogramV1" class="lblHistogramV">10%</label>
 				<label id = "lblHistogramV2" class="lblHistogramV">20%</label>
@@ -967,6 +969,13 @@ showColorPicker();
 		else
 			showColorPicker();
 	}
+
+	function setValueRange()
+	{
+		var histogramH0 = document.getElementById('lblHistogramH0').value;
+		var histogramH10 = document.getElementById('lblHistogramH10').value;
+		colorMapCanvas.setValueRange(histogramH0,histogramH10);
+	}
 	
 	function onHistogramButtonPressed()
 	{
@@ -1019,8 +1028,8 @@ showColorPicker();
 		//ImageSection.style.width = window.innerWidth - 16;
 		//ColorMapSection.style.width = window.innerWidth ;//- 16;
 		
-		var y = document.getElementById('divUndoRedo').offsetTop + document.getElementById('divUndoRedo').offsetHeight;
-		var h = cmHeight - y - 8;
+		var y = 0;
+		var h = cmHeight - 12;
 		var rangeHistogramResolution = document.getElementById('rangeHistogramResolution');
 		if(h > 16)
 		{
