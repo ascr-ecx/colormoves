@@ -12,8 +12,8 @@ function ImageCanvas(canvas, div)
 	gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE);
 	
 	var divImageControlSection = document.getElementById("ImageControlSection");
-	divImageControlSection.style.visibility = 'hidden';
-	divImageControlSection.onmouseleave = function() { fadeOut(divImageControlSection); };
+	// divImageControlSection.style.visibility = 'hidden';
+	// divImageControlSection.onmouseleave = function() { fadeOut(divImageControlSection); };
 	
 	var sdrFloat = initShader(gl, "vsSimple", "fsColorMapping");
 	var sdrTextured = initShader(gl, "vsSimple", "fsSimple");
@@ -864,14 +864,14 @@ setColorMap(gl, sdr, sections, function(section) {return section.colorMap.texI;}
 			}
 		}*/
 		
-		var controlSectionBounds = divImageControlSection.getBoundingClientRect();
-		var canvasBounds = canvas.getBoundingClientRect();
-		if(/*images.length !== 0 &&*/
-		   canvasBounds.left + clientX >= controlSectionBounds.left &&
-		   canvasBounds.top + clientY >= controlSectionBounds.top &&
-		   canvasBounds.left + clientX < controlSectionBounds.right &&
-		   canvasBounds.top + clientY < controlSectionBounds.bottom)
-			fadeIn(divImageControlSection);
+		// var controlSectionBounds = divImageControlSection.getBoundingClientRect();
+		// var canvasBounds = canvas.getBoundingClientRect();
+		// if(/*images.length !== 0 &&*/
+		   // canvasBounds.left + clientX >= controlSectionBounds.left &&
+		   // canvasBounds.top + clientY >= controlSectionBounds.top &&
+		   // canvasBounds.left + clientX < controlSectionBounds.right &&
+		   // canvasBounds.top + clientY < controlSectionBounds.bottom)
+			// fadeIn(divImageControlSection);
 	}
 	
 	this.onMouseLeave = function(canvas, clientX, clientY, pressedmousebuttons)
@@ -880,13 +880,13 @@ setColorMap(gl, sdr, sections, function(section) {return section.colorMap.texI;}
 			mdo.onMouseLeave(canvas, clientX, clientY, pressedmousebuttons);
 		mdo = null;
 
-		var controlSectionBounds = divImageControlSection.getBoundingClientRect();
-		var canvasBounds = canvas.getBoundingClientRect();
-		if(canvasBounds.left + clientX < controlSectionBounds.left ||
-		   canvasBounds.top + clientY < controlSectionBounds.top ||
-		   canvasBounds.left + clientX >= controlSectionBounds.right ||
-		   canvasBounds.top + clientY >= controlSectionBounds.bottom)
-			fadeOut(divImageControlSection);
+		// var controlSectionBounds = divImageControlSection.getBoundingClientRect();
+		// var canvasBounds = canvas.getBoundingClientRect();
+		// if(canvasBounds.left + clientX < controlSectionBounds.left ||
+		   // canvasBounds.top + clientY < controlSectionBounds.top ||
+		   // canvasBounds.left + clientX >= controlSectionBounds.right ||
+		   // canvasBounds.top + clientY >= controlSectionBounds.bottom)
+			// fadeOut(divImageControlSection);
 	}
 	
 	this.onMouseUp = function(canvas, clientX, clientY, which)
